@@ -1,0 +1,72 @@
+buildscript {
+	ext { springBootVersion = '2.0.0.RELEASE' }
+	repositories { mavenCentral() }
+	dependencies { classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}") }
+}
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'application'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+
+group = 'com.smsapi.discovery.service'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = 1.8
+
+mainClassName='com.smsapi.discovery.service.SmsDiscoveryService'
+
+bootJar.enabled = false
+jar.enabled = true
+
+repositories {
+	mavenCentral()
+	maven { url "https://repo.spring.io/milestone" }
+}
+
+
+ext { springCloudVersion = 'Finchley.M9' }
+
+dependencies {
+	compile('org.springframework.cloud:spring-cloud-starter-netflix-eureka-server')
+	compile("org.springframework.boot:spring-boot-starter-actuator")
+	testCompile('org.springframework.boot:spring-boot-starter-test')
+}
+
+dependencyManagement { imports { mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}" } }
+
+def configFiles = [
+	'application.properties',
+	'logback.xml'] as Set
+
+jar{ exclude configFiles }
+
+task copyConfiguration(type: Copy) {
+	def config = file("$buildDir/config")
+	config.mkdirs()
+	from('src/main/resources') {
+		configFiles.each { include it }
+	}
+	into "$buildDir/config"
+}
+
+startScripts {
+	defaultJvmOpts = []
+	applicationName = 'run'
+	println "Appending config folder into classpath in $project.name"
+	classpath += files("$buildDir/config")
+	doLast {
+		def windowsScriptFile = file getWindowsScript()
+		def unixScriptFile = file getUnixScript()
+		windowsScriptFile.text = windowsScriptFile.text.replace("lib\\config", "config")
+		windowsScriptFile.text = windowsScriptFile.text.replace("APP_NAME=\"run\"", "APP_NAME=\"$project.name\"")
+		unixScriptFile.text = unixScriptFile.text.replace("lib/config", "config/")
+		unixScriptFile.text = unixScriptFile.text.replace("APP_NAME=\"run\"", "APP_NAME=\"$project.name\"")
+	}
+}
+
+
+
+applicationDistribution.from(copyConfiguration) { into "config" }
+
+[distTar, distZip]*.dependsOn(copyConfiguration)
